@@ -1,28 +1,13 @@
 #pragma once
 
+#include "array_ptr.h"
+
 #include <iostream>
 #include <cassert>
 #include <algorithm>
 #include <initializer_list>
 #include <stdexcept>
 #include <utility>
-
-class ReserveProxyObj 
-{
-public:
-    explicit ReserveProxyObj(size_t capacity_to_reserve) :proxy_capacity_(capacity_to_reserve) {}
-
-    size_t GetCapacity() {
-        return proxy_capacity_;
-    }
-
-private:
-    size_t proxy_capacity_;
-};
-
-ReserveProxyObj Reserve(size_t capacity_to_reserve) {
-    return ReserveProxyObj(capacity_to_reserve);
-}
 
 template <typename Type>
 class SimpleVector {
@@ -48,18 +33,11 @@ public:
     }
 
     // Конструктор копирования
-    SimpleVector(const SimpleVector& other) noexcept {
-        SimpleVector tmp;
-        tmp.size_ = 0;
-        tmp.capacity_ = other.capacity_;
-        tmp.data = new Type[other.size_];
-        int counter = 0;
+    SimpleVector(const SimpleVector& other) noexcept : size_(0), capacity_(other.capacity_), data(new Type[other.size_]) {
         for (auto it = other.begin(); it != other.end(); ++it) {
-            tmp[counter] = *it;
-            ++counter;
-            ++tmp.size_;
+            data[size_] = *it;
+            ++size_;
         }
-        swap(tmp);
     }
 
     // Оператор присваивания для копирования
@@ -84,16 +62,16 @@ public:
 
     // Оператор присваивания для перемещения
     SimpleVector& operator=(SimpleVector&& rhs) noexcept {
-        delete[] data;
+        if (this != &rhs) {
+            delete[] data;
+            data = rhs.data;
+            size_ = rhs.size_;
+            capacity_ = rhs.capacity_;
 
-        data = rhs.data;
-        size_ = rhs.size_;
-        capacity_ = rhs.capacity_;
-
-        rhs.data = nullptr;
-        rhs.size_ = 0;
-        rhs.capacity_ = 0;
-
+            rhs.data = nullptr;
+            rhs.size_ = 0;
+            rhs.capacity_ = 0;
+        }
         return *this;
     }
 
@@ -162,6 +140,8 @@ public:
     //Если перед вставкой значения вектор был заполнен полностью,
     //вместимость вектора должна увеличиться вдвое, а для вектора вместимостью 0 стать равной 1
     Iterator Insert(ConstIterator pos, const Type& value) {
+        assert(pos >= begin() && pos <= end());
+
         if (capacity_ == size_) {
             capacity_ == 0 ? capacity_ = 1 : capacity_ = capacity_ * 2;
             Type* temp_data = new Type[capacity_];
@@ -174,6 +154,8 @@ public:
             return new_elem;
         }
         else {
+            assert(pos >= begin() && pos < end());
+
             std::move_backward(Iterator(pos), end(), std::next(end()));
             *(Iterator(pos)) = std::move(value);
             ++size_;
@@ -257,7 +239,7 @@ public:
     // Изменяет размер массива.
     // При увеличении размера новые элементы получают значение по умолчанию для типа Type
     void Resize(const size_t new_size) {
-        
+
         if (new_size > size_ && new_size < capacity_) {
             FillVectorDef(begin() + size_, begin() + new_size); // Заполняем новые элементы значениями по умолчанию
         }
@@ -270,7 +252,7 @@ public:
             delete[] data;
             data = buffer_data;
         }
-        
+
         size_ = new_size;
     }
 
@@ -325,7 +307,7 @@ private:
             first++;
         }
     }
-    
+
     void Fill(Iterator first, Iterator last, Type value) {
         while (first != last) {
             *first = std::move(value);
@@ -352,7 +334,7 @@ inline bool operator<(const SimpleVector<Type>& lhs, const SimpleVector<Type>& r
 
 template <typename Type>
 inline bool operator<=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return (lhs < rhs) || (lhs == rhs);
+    return !(rhs < lhs);
 }
 
 template <typename Type>
